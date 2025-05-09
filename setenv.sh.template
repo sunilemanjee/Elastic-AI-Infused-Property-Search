@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Azure OpenAI Configuration
+export AZURE_OPENAI_ENDPOINT=your-endpoint-here
+export AZURE_OPENAI_API_KEY=your-api-key-here
+export AZURE_OPENAI_MODEL=your-model-name-here
+export OPENAI_API_VERSION=2023-05-15 
