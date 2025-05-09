@@ -4,9 +4,16 @@ An intelligent property search system that combines Elasticsearch's powerful sea
 
 ## Demo
 
+
+
+
 Watch a demo of the property search system in action:
 
-<iframe width="560" height="315" src="https://videos.elastic.co/embed/1qQtsuYSdeXGpvdhfYosnn" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+https://github.com/user-attachments/assets/df498631-fb16-4ba5-b1fd-c14670213d73
+
+https://github.com/user-attachments/assets/562cbc97-d785-4d01-8561-1c4c10a3b4c9
+
+
 
 This demo showcases:
 - Natural language property search
@@ -23,6 +30,7 @@ This demo showcases:
 - Real-time streaming responses
 - Dynamic query generation
 - Location-based search capabilities
+
 
 ## Architecture
 
