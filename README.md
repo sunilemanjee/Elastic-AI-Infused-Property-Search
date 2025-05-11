@@ -121,7 +121,7 @@ pip install -r requirements.txt
 
 1. Start the application:
 ```bash
-chainlit run app.py
+chainlit run src/app.py
 ```
 
 2. Open your browser and navigate to `http://localhost:8000`
