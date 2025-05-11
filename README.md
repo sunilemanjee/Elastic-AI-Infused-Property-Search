@@ -26,11 +26,19 @@ This demo showcases:
 - Interactive chat interface powered by Chainlit
 - Azure OpenAI API integration for natural language understanding
 - Elasticsearch for powerful property search
-- Google Maps API integration for location services
 - Real-time streaming responses
 - Dynamic query generation
 - Location-based search capabilities
 
+## Data Ingestion
+
+Before running the demo, you need to ingest sample property data into your Elasticsearch instance. The data ingestion scripts and detailed instructions can be found in the [Elastic Python MCP Server repository](https://github.com/sunilemanjee/Elastic-Python-MCP-Server/tree/main/data-ingestion).
+
+Follow these steps:
+1. Clone the MCP Server repository
+2. Navigate to the data-ingestion directory
+3. Follow the instructions in the README to ingest the sample property data
+4. Verify the data has been successfully ingested before proceeding with the demo
 
 ## Architecture
 
@@ -65,7 +73,7 @@ The system consists of four main components:
 - Python 3.8 or higher
 - Azure OpenAI API access
 - Elasticsearch Serverless instance
-- Google Maps API key
+- Poperty data (see Data Ingestion section above)
 
 ## Installation
 
@@ -148,7 +156,3 @@ chainlit run app.py
 3. Commit your changes
 4. Push to the branch
 5. Create a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
