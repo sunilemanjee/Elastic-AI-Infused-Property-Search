@@ -8,6 +8,23 @@ __pycache__/
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
 .env
 .venv
 env/
@@ -37,3 +54,4 @@ Thumbs.db
 # Project specific
 .chainlit/
 public/uploads/ run.me
+app-orig.py
