@@ -1,91 +1,37 @@
-# Elastic AI Infused Property Search
+# Elastic AI-Infused Property Search
 
-An intelligent property search system that combines Elasticsearch's powerful search capabilities with Azure OpenAI's natural language processing to create a conversational property search experience.
-
-## Demo
-
-
-
-
-Watch a demo of the property search system in action:
-
-https://github.com/user-attachments/assets/df498631-fb16-4ba5-b1fd-c14670213d73
-
-
-
-
-This demo showcases:
-- Natural language property search
-- Location-based search capabilities
-- Real-time property recommendations
-- Interactive chat interface
+A powerful property search application that combines Elasticsearch with AI capabilities, allowing users to search for properties using natural language queries.
 
 ## Features
 
-- Interactive chat interface powered by Chainlit
-- Azure OpenAI API integration for natural language understanding
-- Elasticsearch for powerful property search
-- Real-time streaming responses
-- Dynamic query generation
-- Location-based search capabilities
-
-## Data Ingestion
-
-Before running the demo, you need to ingest sample property data into your Elasticsearch instance. The data ingestion scripts and detailed instructions can be found in the [Elastic Python MCP Server repository](https://github.com/sunilemanjee/Elastic-Python-MCP-Server/tree/main/data-ingestion).
-
-Follow these steps:
-1. Clone the MCP Server repository
-2. Navigate to the data-ingestion directory
-3. Follow the instructions in the README to ingest the sample property data
-4. Verify the data has been successfully ingested before proceeding with the demo
-
-## Architecture
-
-The system consists of four main components:
-
-1. **Chainlit UI Layer**
-   - Interactive chat interface
-   - Real-time message streaming
-   - Property result display
-   - Image visualization
-
-2. **Azure OpenAI Integration**
-   - Natural language processing
-   - Entity detection
-   - Context management
-   - Response generation
-
-3. **Elasticsearch Backend**
-   - Property data storage
-   - Search templates
-   - Geo-spatial search
-   - Result ranking
-
-4. **MCP Server**
-   - Tool orchestration
-   - API integration
-   - Response processing
-   - Query generation
+- **Dual LLM Support**: Choose between:
+  - Azure OpenAI: For production-grade AI capabilities
+  - Local LLM (via LM Studio): For privacy-focused or offline usage
+- **Intelligent Query Processing**: Leverages LLM functions to understand query intent and detect entities, then dynamically generates precise Elasticsearch queries using search templates
+- **Elasticsearch Integration**: Efficient property search and filtering
+- **Real-time Results**: Get instant property matches based on your criteria
+- **Interactive UI**: User-friendly interface with clear model selection and search capabilities
 
 ## Prerequisites
 
-- Python 3.8 or higher
-- Azure OpenAI API access
-- Elasticsearch Serverless instance
-- Poperty data (see Data Ingestion section above)
+- Python 3.11 or higher
+- Elasticsearch instance
+- One of the following:
+  - Azure OpenAI account and credentials, or
+  - LM Studio with a compatible model (e.g., Qwen2.5-7B-Instruct)
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/elastic-ai-property-search.git
-cd elastic-ai-property-search
+git clone https://github.com/yourusername/Elastic-AI-Infused-Property-Search.git
+cd Elastic-AI-Infused-Property-Search
 ```
 
 2. Create and activate a virtual environment:
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # On Windows, use: .venv\Scripts\activate
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 3. Install dependencies:
@@ -95,27 +41,17 @@ pip install -r requirements.txt
 
 4. Set up environment variables:
 
-   **Option 1: Using setenv.sh (Recommended)**
-   ```bash
-   # Copy the template file
-   cp setenv.sh.template setenv.sh
-   
-   # Edit setenv.sh with your credentials
-   # IMPORTANT: Never commit setenv.sh to version control!
-   nano setenv.sh  # or use your preferred editor
-   
-   # Source the environment variables
-   source setenv.sh
-   ```
+For Azure OpenAI:
+```bash
+cp azure.env.example azure.env
+# Edit azure.env with your Azure OpenAI credentials
+source setenv.sh
+```
 
-   **Option 2: Manual Setup**
-   Create an `azure.env` file with the following content:
-   ```env
-   AZURE_OPENAI_MODEL=your-model-name
-   AZURE_OPENAI_ENDPOINT=your-endpoint
-   AZURE_OPENAI_API_KEY=your-api-key
-   OPENAI_API_VERSION=2023-05-15
-   ```
+For Local LLM:
+- Install and start LM Studio
+- Load your preferred model (e.g., Qwen2.5-7B-Instruct)
+- Start the local server in LM Studio
 
 ## Usage
 
@@ -126,32 +62,50 @@ chainlit run src/app.py
 
 2. Open your browser and navigate to `http://localhost:8000`
 
-3. Start searching for properties using natural language queries like:
-   - "Find me a 3-bedroom house near downtown with a pool"
-   - "Show me apartments under $2000 with parking"
-   - "I need a pet-friendly condo within 5 miles of the beach"
+3. Choose your preferred LLM:
+   - Azure OpenAI: For production-grade AI capabilities
+   - Local LLM: For privacy-focused or offline usage
 
-## Project Structure
+4. Start searching for properties using natural language queries like:
+   - "Find apartments in New York under $500,000"
+   - "Show me 3-bedroom houses in San Francisco with a pool"
+   - "What are the most expensive properties in Los Angeles?"
 
+## Configuration
+
+### Azure OpenAI Setup
+1. Create an Azure OpenAI resource
+2. Get your API key and endpoint
+3. Update `azure.env` with your credentials:
 ```
-.
-├── src/               # Source code
-│   ├── app.py        # Main application file
-│   └── __init__.py   # Package initialization
-├── tests/            # Test directory
-├── docs/             # Documentation
-│   └── ai_property_search_article.md
-├── public/           # Public assets
-├── .chainlit/        # Chainlit configuration
-├── requirements.txt  # Project dependencies
-├── setenv.sh.template # Template for environment variables
-└── .gitignore       # Git ignore file
+AZURE_OPENAI_ENDPOINT=your_endpoint
+AZURE_OPENAI_API_KEY=your_key
+OPENAI_API_VERSION=2024-02-15-preview
+AZURE_OPENAI_MODEL=your_model
 ```
+
+### Local LLM Setup
+1. Download and install [LM Studio](https://lmstudio.ai/)
+2. Download a compatible model (e.g., Qwen2.5-7B-Instruct)
+3. Load the model in LM Studio
+4. Start the local server (default: http://localhost:1234)
+
+## Architecture
+
+The application uses a modular architecture:
+- **Frontend**: Chainlit-based UI with model selection and chat interface
+- **LLM Layer**: Supports both Azure OpenAI and local models via LM Studio
+- **Intelligent Query Layer**: 
+  - LLM functions for query intent understanding and entity detection
+  - Dynamic query generation using Elasticsearch search templates
+  - Precise parameter extraction and mapping to schema
+- **Search Engine**: Elasticsearch for efficient property search
+- **MCP Integration**: Model Control Protocol for tool calling
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

@@ -45,7 +45,8 @@ class ChatClient:
                 base_url="http://localhost:1234/v1",
                 api_key="lm-studio"  # LM Studio uses this as a placeholder
             )
-            self.model = "qwen2.5-7b-instruct-1m"  # Local model
+            #self.model = "qwen2.5-7b-instruct-1m"  # Local model
+            self.model = os.environ["LOCAL_LLM_MODEL"]
         else:
             # Initialize with Azure OpenAI configuration
             self.client = AsyncAzureOpenAI(
