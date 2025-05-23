@@ -104,6 +104,20 @@ AZURE_OPENAI_MODEL=your_model
    - The "Wake Elser" button is not required
    - The model remains active and ready for use
 
+### Local LLM Requirements
+- If using the local LLM option, your model must support function calling/tools
+- The model should be able to:
+  - Parse and understand tool definitions in JSON format
+  - Generate structured responses that can be parsed as tool calls
+  - Handle multiple tools in a single conversation
+- Recommended models that support tools:
+  - Qwen 2.5 7B Instruct (default)
+  - Llama 2 70B Chat
+  - Mistral 7B Instruct
+  - Any other model that supports function calling/tools
+- The model should be running locally via LM Studio or a similar inference server
+- Set the `LOCAL_LLM_MODEL` environment variable to your model's name in `setenv.sh`
+
 ## Architecture
 
 The application uses a modular architecture:
