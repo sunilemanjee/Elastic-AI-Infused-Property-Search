@@ -11,6 +11,11 @@ A powerful property search application that combines Elasticsearch with AI capab
 - **Elasticsearch Integration**: Efficient property search and filtering
 - **Real-time Results**: Get instant property matches based on your criteria
 - **Interactive UI**: User-friendly interface with clear model selection and search capabilities
+- **ELSER Model Management**: 
+  - "Wake Elser" button for serverless deployments
+  - Automatically wakes up the default ELSER model if it has scaled down due to inactivity
+  - Only required when using the default ELSER model in serverless deployments
+  - Not needed for non-default ELSER model deployments
 
 ## Prerequisites
 
@@ -89,6 +94,15 @@ AZURE_OPENAI_MODEL=your_model
 2. Download a compatible model (e.g., Qwen2.5-7B-Instruct)
 3. Load the model in LM Studio
 4. Start the local server (default: http://localhost:1234)
+
+### ELSER Model Configuration
+1. For serverless deployments using the default ELSER model:
+   - The model will scale down to zero after 10+ minutes of inactivity
+   - Use the "Wake Elser" button to reactivate the model when needed
+   - This helps save costs in serverless environments
+2. For non-default ELSER model deployments:
+   - The "Wake Elser" button is not required
+   - The model remains active and ready for use
 
 ## Architecture
 

@@ -8,7 +8,15 @@ import chainlit as cl
 from openai import AzureOpenAI, AsyncAzureOpenAI, OpenAI, AsyncOpenAI
 import traceback
 from dotenv import load_dotenv
+from elasticsearch import Elasticsearch
 load_dotenv("azure.env")
+
+# Initialize Elasticsearch client with credentials
+es_client = Elasticsearch(
+    os.environ.get("ES_URL", "http://localhost:9200"),
+    api_key=os.environ.get("ES_API_KEY"),
+    request_timeout=300
+)
 
 SYSTEM_PROMPT = """You are a helpful home finder assistant. You have access to tools that can help you search for properties.
 
@@ -45,8 +53,8 @@ class ChatClient:
                 base_url="http://localhost:1234/v1",
                 api_key="lm-studio"  # LM Studio uses this as a placeholder
             )
-            #self.model = "qwen2.5-7b-instruct-1m"  # Local model
-            self.model = os.environ["LOCAL_LLM_MODEL"]
+            # Use a default model if LOCAL_LLM_MODEL is not set
+            self.model = os.environ.get("LOCAL_LLM_MODEL", "qwen2.5-7b-instruct-1m")
         else:
             # Initialize with Azure OpenAI configuration
             self.client = AsyncAzureOpenAI(
@@ -74,11 +82,23 @@ class ChatClient:
                         await stream._stream.aclose()
                     except Exception:
                         pass
+                # Add specific handling for HTTP11ConnectionByteStream
+                elif hasattr(stream, '__aiter__'):
+                    try:
+                        await stream.aclose()
+                    except Exception:
+                        pass
             except Exception as e:
                 # Log the error but don't raise it
                 print(f"Error during stream cleanup: {str(e)}")
                 continue
         self.active_streams = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self._cleanup_streams()
         
     def _parse_json_response(self, content):
         """Parse JSON response from content field and convert to tool call format"""
@@ -357,6 +377,30 @@ async def call_tool(mcp_name, function_name, function_args):
         resp_items.append({"type": "text", "text": f"Error: {str(e)}"})
     return json.dumps(resp_items)
 
+async def wake_elser():
+    """Wake up the ELSER model by sending a test inference request"""
+    try:
+        print("Attempting to wake ELSER...")
+        print(f"Using ES URL: {os.environ.get('ES_URL')}")
+        print(f"Using ES API Key: {os.environ.get('ES_API_KEY')[:10]}...")  # Only show first 10 chars for security
+        
+        inference_id = os.environ.get("ELSER_INFERENCE_ID", "elser")
+        print(f"Sending wake-up request to inference ID: {inference_id}")
+        
+        response = es_client.inference.inference(
+            inference_id=inference_id,
+            input=['wake up']
+        )
+        
+        print(f"ELSER wake-up response: {response}")
+        print("ELSER wake-up successful!")
+        return True, "ELSER has awakened"
+    except Exception as e:
+        error_msg = f"Failed to wake ELSER: {str(e)}"
+        print(f"Error: {error_msg}")
+        traceback.print_exc()  # Print full stack trace
+        return False, error_msg
+
 @cl.on_chat_start
 async def start_chat():
     # Check Azure credentials
@@ -393,6 +437,17 @@ Select which AI model you'd like to use for your property search:
     
     # Create actions list
     actions = []
+    
+    # Add Wake Elser button
+    actions.append(
+        cl.Action(
+            name="wake_elser",
+            label="Wake Elser",
+            value="wake_elser",
+            payload={"action": "wake_elser"},
+            description="Wake up the ELSER model for inference"
+        )
+    )
     
     # Add Azure OpenAI button
     actions.append(
@@ -472,6 +527,15 @@ async def on_use_local(action):
     cl.user_session.set("use_local_llm", True)
     await cl.Message(
         content="✅ Switched to Local LLM",
+        author="System"
+    ).send()
+
+@cl.action_callback("wake_elser")
+async def on_wake_elser(action):
+    print("Wake Elser button clicked")
+    success, message = await wake_elser()
+    await cl.Message(
+        content=message,
         author="System"
     ).send()
 
