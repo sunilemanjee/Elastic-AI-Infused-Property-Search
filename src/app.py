@@ -442,7 +442,7 @@ Select which AI model you'd like to use for your property search:
     actions.append(
         cl.Action(
             name="wake_elser",
-            label="Wake Elser",
+            label="Wake ELSER",
             value="wake_elser",
             payload={"action": "wake_elser"},
             description="Wake up the ELSER model for inference"
