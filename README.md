@@ -48,8 +48,7 @@ pip install -r requirements.txt
 
 For Azure OpenAI:
 ```bash
-cp azure.env.example azure.env
-# Edit azure.env with your Azure OpenAI credentials
+# Edit setenv.sh with your Azure OpenAI credentials
 source setenv.sh
 ```
 
@@ -81,7 +80,7 @@ chainlit run src/app.py
 ### Azure OpenAI Setup
 1. Create an Azure OpenAI resource
 2. Get your API key and endpoint
-3. Update `azure.env` with your credentials:
+3. Update `setenv.sh` with your credentials:
 ```
 AZURE_OPENAI_ENDPOINT=your_endpoint
 AZURE_OPENAI_API_KEY=your_key
