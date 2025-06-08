@@ -9,6 +9,7 @@ from openai import AzureOpenAI, AsyncAzureOpenAI, OpenAI, AsyncOpenAI
 import traceback
 from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
+import asyncio
 load_dotenv("azure.env")
 
 # Initialize Elasticsearch client with credentials
@@ -105,6 +106,9 @@ class ChatClient:
         try:
             # Clean up the content string
             content = content.strip()
+            if not content:  # Handle empty content
+                return None
+                
             if content.startswith('<tool_call>'):
                 content = content[11:]
             if content.endswith('</tool_call>'):
@@ -121,8 +125,12 @@ class ChatClient:
                         "arguments": json.dumps(parsed["arguments"])
                     }
                 }
+        except json.JSONDecodeError as e:
+            print(f"JSON parsing error: {str(e)}")
+            return None
         except Exception as e:
             print(f"Error parsing JSON response: {str(e)}")
+            return None
         return None
 
     async def process_response_stream(self, response_stream, tools, temperature=0):
@@ -385,16 +393,37 @@ async def wake_elser():
         print(f"Using ES API Key: {os.environ.get('ES_API_KEY')[:10]}...")  # Only show first 10 chars for security
         
         inference_id = os.environ.get("ELSER_INFERENCE_ID", "elser")
-        print(f"Sending wake-up request to inference ID: {inference_id}")
+        print(f"Checking status of inference ID: {inference_id}")
         
-        response = es_client.inference.inference(
-            inference_id=inference_id,
-            input=['wake up']
-        )
+        # First check the model deployment status
+        try:
+            stats = es_client.ml.get_trained_models_stats(model_id=inference_id)
+            print(f"Model deployment status: {stats}")
+        except Exception as e:
+            print(f"Could not get model stats: {str(e)}")
         
-        print(f"ELSER wake-up response: {response}")
-        print("ELSER wake-up successful!")
-        return True, "ELSER has awakened"
+        # Try up to 3 times with increasing delays
+        max_retries = 3
+        retry_delays = [5, 10, 15]  # seconds
+        
+        for attempt, delay in enumerate(retry_delays, 1):
+            try:
+                print(f"Attempt {attempt} of {max_retries}...")
+                response = es_client.inference.inference(
+                    inference_id=inference_id,
+                    input=['wake up']
+                )
+                print(f"ELSER wake-up response: {response}")
+                print("ELSER wake-up successful!")
+                return True, "ELSER has awakened"
+            except Exception as e:
+                if "model_deployment_timeout_exception" in str(e) and attempt < max_retries:
+                    print(f"Model deployment timeout, waiting {delay} seconds before retry...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise
+        
+        return False, "Failed to wake ELSER after multiple attempts"
     except Exception as e:
         error_msg = f"Failed to wake ELSER: {str(e)}"
         print(f"Error: {error_msg}")
