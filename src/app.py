@@ -10,6 +10,7 @@ import traceback
 from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
 import asyncio
+import sniffio
 load_dotenv("azure.env")
 
 # Initialize Elasticsearch client with credentials
@@ -71,29 +72,37 @@ class ChatClient:
         
     async def _cleanup_streams(self):
         """Helper method to clean up all active streams"""
-        for stream in self.active_streams:
+        for stream in self.active_streams[:]:  # Create a copy of the list to avoid modification during iteration
             try:
                 if hasattr(stream, 'aclose'):
-                    await stream.aclose()
+                    try:
+                        await stream.aclose()
+                    except (RuntimeError, asyncio.CancelledError, sniffio._impl.AsyncLibraryNotFoundError) as e:
+                        print(f"[Cleanup] Ignoring error during aclose: {str(e)}")
                 elif hasattr(stream, 'close'):
-                    await stream.close()
+                    try:
+                        await stream.close()
+                    except (RuntimeError, asyncio.CancelledError, sniffio._impl.AsyncLibraryNotFoundError) as e:
+                        print(f"[Cleanup] Ignoring error during close: {str(e)}")
                 # Add specific handling for HTTP streams
                 elif hasattr(stream, '_stream'):
                     try:
                         await stream._stream.aclose()
-                    except Exception:
-                        pass
+                    except (RuntimeError, asyncio.CancelledError, sniffio._impl.AsyncLibraryNotFoundError) as e:
+                        print(f"[Cleanup] Ignoring error during _stream.aclose: {str(e)}")
                 # Add specific handling for HTTP11ConnectionByteStream
                 elif hasattr(stream, '__aiter__'):
                     try:
                         await stream.aclose()
-                    except Exception:
-                        pass
+                    except (RuntimeError, asyncio.CancelledError, sniffio._impl.AsyncLibraryNotFoundError) as e:
+                        print(f"[Cleanup] Ignoring error during __aiter__ aclose: {str(e)}")
             except Exception as e:
                 # Log the error but don't raise it
-                print(f"Error during stream cleanup: {str(e)}")
-                continue
-        self.active_streams = []
+                print(f"[Cleanup] Error during stream cleanup: {str(e)}")
+            finally:
+                # Always remove the stream from active_streams
+                if stream in self.active_streams:
+                    self.active_streams.remove(stream)
 
     async def __aenter__(self):
         return self
@@ -107,6 +116,7 @@ class ChatClient:
             # Clean up the content string
             content = content.strip()
             if not content:  # Handle empty content
+                print("[JSON] Empty content received")
                 return None
                 
             if content.startswith('<tool_call>'):
@@ -114,24 +124,38 @@ class ChatClient:
             if content.endswith('</tool_call>'):
                 content = content[:-12]
             
-            # Parse the JSON
-            parsed = json.loads(content)
-            if "name" in parsed and "arguments" in parsed:
-                return {
-                    "id": f"call_{hash(str(parsed))}",  # Generate a unique ID
-                    "type": "function",
-                    "function": {
-                        "name": parsed["name"],
-                        "arguments": json.dumps(parsed["arguments"])
+            # Additional content validation
+            if not content or content.isspace():
+                print("[JSON] Content is empty or whitespace after cleanup")
+                return None
+                
+            # Try to parse the JSON
+            try:
+                parsed = json.loads(content)
+                if not isinstance(parsed, dict):
+                    print(f"[JSON] Parsed content is not a dictionary: {type(parsed)}")
+                    return None
+                    
+                if "name" in parsed and "arguments" in parsed:
+                    return {
+                        "id": f"call_{hash(str(parsed))}",  # Generate a unique ID
+                        "type": "function",
+                        "function": {
+                            "name": parsed["name"],
+                            "arguments": json.dumps(parsed["arguments"])
+                        }
                     }
-                }
-        except json.JSONDecodeError as e:
-            print(f"JSON parsing error: {str(e)}")
-            return None
+                else:
+                    print(f"[JSON] Missing required fields in parsed content: {parsed}")
+                    return None
+            except json.JSONDecodeError as e:
+                print(f"[JSON] Error parsing JSON content: {str(e)}")
+                print(f"[JSON] Raw content: {content}")
+                return None
         except Exception as e:
-            print(f"Error parsing JSON response: {str(e)}")
+            print(f"[JSON] Unexpected error in _parse_json_response: {str(e)}")
+            print(f"[JSON] Content that caused error: {content}")
             return None
-        return None
 
     async def process_response_stream(self, response_stream, tools, temperature=0):
         """
@@ -144,102 +168,136 @@ class ChatClient:
         collected_messages = []
         tool_calls = []
         tool_called = False
+        error_occurred = False
         
+        print(f"[Stream] Starting new response stream processing")
+        # Clean up any existing streams before adding new one
+        await self._cleanup_streams()
         # Add to active streams for cleanup if needed
         self.active_streams.append(response_stream)
+        print(f"[Stream] Added to active streams. Total active streams: {len(self.active_streams)}")
         
         try:
-            async for part in response_stream:
-                if part.choices == []:
-                    continue
-                delta = part.choices[0].delta
-                finish_reason = part.choices[0].finish_reason
-                
-                # Process assistant content
-                if delta.content:
-                    collected_messages.append(delta.content)
-                    yield delta.content
-                
-                # Handle tool calls
-                if delta.tool_calls:
-                    for tc in delta.tool_calls:
-                        if len(tool_calls) <= tc.index:
-                            tool_calls.append({
-                                "id": "", "type": "function",
-                                "function": {"name": "", "arguments": ""}
-                            })
-                        tool_calls[tc.index] = {
-                            "id": (tool_calls[tc.index]["id"] + (tc.id or "")),
-                            "type": "function",
-                            "function": {
-                                "name": (tool_calls[tc.index]["function"]["name"] + (tc.function.name or "")),
-                                "arguments": (tool_calls[tc.index]["function"]["arguments"] + (tc.function.arguments or ""))
-                            }
-                        }
-                
-                # Check if we've reached the end of a tool call
-                if finish_reason == "tool_calls" and tool_calls:
-                    for tool_call in tool_calls:
-                        await self._handle_tool_call(
-                            tool_call["function"]["name"],
-                            tool_call["function"]["arguments"],
-                            tool_call["id"]
-                        )
-                    tool_called = True
-                    break
-                
-                # Check if we've reached the end of assistant's response
-                if finish_reason == "stop":
-                    # Try to parse the final content as a tool call
-                    final_content = ''.join([msg for msg in collected_messages if msg is not None])
-                    if final_content.strip():
-                        tool_call = self._parse_json_response(final_content)
-                        if tool_call:
-                            await self._handle_tool_call(
-                                tool_call["function"]["name"],
-                                tool_call["function"]["arguments"],
-                                tool_call["id"]
-                            )
+            print("[Stream] Beginning to iterate over response stream")
+            async with asyncio.timeout(30):  # Add timeout to prevent hanging connections
+                try:
+                    async for part in response_stream:
+                        if not part or not part.choices:
+                            print("[Stream] Received empty part or choices, continuing")
+                            continue
+                            
+                        delta = part.choices[0].delta
+                        finish_reason = part.choices[0].finish_reason
+                        
+                        # Process assistant content
+                        if delta and delta.content:
+                            collected_messages.append(delta.content)
+                            yield delta.content
+                        
+                        # Handle tool calls
+                        if delta and delta.tool_calls:
+                            print(f"[Stream] Processing tool calls: {delta.tool_calls}")
+                            for tc in delta.tool_calls:
+                                if len(tool_calls) <= tc.index:
+                                    tool_calls.append({
+                                        "id": "", "type": "function",
+                                        "function": {"name": "", "arguments": ""}
+                                    })
+                                tool_calls[tc.index] = {
+                                    "id": (tool_calls[tc.index]["id"] + (tc.id or "")),
+                                    "type": "function",
+                                    "function": {
+                                        "name": (tool_calls[tc.index]["function"]["name"] + (tc.function.name or "")),
+                                        "arguments": (tool_calls[tc.index]["function"]["arguments"] + (tc.function.arguments or ""))
+                                    }
+                                }
+                        
+                        # Check if we've reached the end of a tool call
+                        if finish_reason == "tool_calls" and tool_calls:
+                            print(f"[Stream] Tool calls completed. Processing {len(tool_calls)} tool calls")
+                            for tool_call in tool_calls:
+                                await self._handle_tool_call(
+                                    tool_call["function"]["name"],
+                                    tool_call["function"]["arguments"],
+                                    tool_call["id"]
+                                )
                             tool_called = True
-                        else:
-                            self.messages.append({"role": "assistant", "content": final_content})
-                    
-                    # Remove from active streams after normal completion
+                            break
+                        
+                        # Check if we've reached the end of assistant's response
+                        if finish_reason == "stop":
+                            print("[Stream] Received stop signal, processing final content")
+                            # Try to parse the final content as a tool call
+                            final_content = ''.join([msg for msg in collected_messages if msg is not None])
+                            if final_content.strip():
+                                # First check if content looks like JSON (starts with { or [)
+                                if final_content.strip().startswith(('{', '[')):
+                                    try:
+                                        tool_call = self._parse_json_response(final_content)
+                                        if tool_call:
+                                            print(f"[Stream] Parsed final content as tool call: {tool_call['function']['name']}")
+                                            await self._handle_tool_call(
+                                                tool_call["function"]["name"],
+                                                tool_call["function"]["arguments"],
+                                                tool_call["id"]
+                                            )
+                                            tool_called = True
+                                        else:
+                                            print("[Stream] Content was not a valid tool call, adding as assistant message")
+                                            self.messages.append({"role": "assistant", "content": final_content})
+                                    except json.JSONDecodeError as json_err:
+                                        print(f"[Stream] JSON parsing error in final content: {json_err}")
+                                        print(f"[Stream] Raw final content: {final_content}")
+                                        # If we have a tool call pending, don't add the content as a message
+                                        if not tool_called:
+                                            self.messages.append({"role": "assistant", "content": final_content})
+                                else:
+                                    # Content is not JSON, treat as regular message
+                                    print("[Stream] Final content is not JSON, adding as assistant message")
+                                    self.messages.append({"role": "assistant", "content": final_content})
+                            elif tool_called:
+                                # If we had a tool call but no content, add a default message
+                                self.messages.append({"role": "assistant", "content": "I've processed your request. Is there anything else you'd like to know about these properties?"})
+                            break
+                except asyncio.CancelledError:
+                    print("[Stream] Stream cancelled")
+                    raise
+                finally:
+                    # Ensure proper cleanup of the stream
                     if response_stream in self.active_streams:
                         self.active_streams.remove(response_stream)
                         try:
-                            await response_stream.aclose()
-                        except Exception:
-                            pass
-                    break
-                    
-        except GeneratorExit:
-            # Clean up this specific stream without recursive cleanup
-            if response_stream in self.active_streams:
-                self.active_streams.remove(response_stream)
-                try:
-                    await response_stream.aclose()
-                except Exception:
-                    pass
+                            if hasattr(response_stream, 'aclose'):
+                                await response_stream.aclose()
+                            elif hasattr(response_stream, 'close'):
+                                await response_stream.close()
+                        except (RuntimeError, asyncio.CancelledError, sniffio._impl.AsyncLibraryNotFoundError) as e:
+                            print(f"[Stream] Error during stream cleanup: {str(e)}")
+        except asyncio.TimeoutError:
+            print("[Stream] Stream connection timed out")
+            error_occurred = True
         except Exception as e:
-            print(f"Error in process_response_stream: {e}")
+            print(f"[Stream] Error in process_response_stream: {str(e)}")
+            print(f"[Stream] Error type: {type(e)}")
             traceback.print_exc()
-            if response_stream in self.active_streams:
-                self.active_streams.remove(response_stream)
-                try:
-                    await response_stream.aclose()
-                except Exception:
-                    pass
+            error_occurred = True
             self.last_error = str(e)
-        
-        # Store result in instance variables
-        self.tool_called = tool_called
-        self.last_function_name = function_name if tool_called else None
+        finally:
+            # Store result in instance variables
+            self.tool_called = tool_called
+            self.last_function_name = function_name if tool_called else None
+            print(f"[Stream] Stream processing completed. Tool called: {tool_called}, Function name: {self.last_function_name}, Error occurred: {error_occurred}")
 
     async def _handle_tool_call(self, function_name, function_arguments, tool_call_id):
         """Handle a tool call by calling the appropriate MCP tool"""
         print(f"function_name: {function_name} function_arguments: {function_arguments}")
-        function_args = json.loads(function_arguments)
+        try:
+            function_args = json.loads(function_arguments)
+        except json.JSONDecodeError as e:
+            print(f"[JSON] Error parsing function arguments: {str(e)}")
+            print(f"[JSON] Raw function arguments: {function_arguments}")
+            return
+
         mcp_tools = cl.user_session.get("mcp_tools", {})
         mcp_name = None
         for connection_name, session_tools in mcp_tools.items():
@@ -262,15 +320,39 @@ class ChatClient:
             ]
         })
         
-        # Call the tool and add response to messages
-        func_response = await call_tool(mcp_name, function_name, function_args)
-        print(f"Function Response: {json.loads(func_response)}")
-        self.messages.append({
-            "tool_call_id": tool_call_id,
-            "role": "tool",
-            "name": function_name,
-            "content": json.loads(func_response),
-        })
+        try:
+            # Call the tool and add response to messages
+            func_response = await call_tool(mcp_name, function_name, function_args)
+            print(f"[Tool] Raw function response: {func_response}")
+            
+            try:
+                parsed_response = json.loads(func_response)
+                print(f"[Tool] Parsed function response: {parsed_response}")
+                self.messages.append({
+                    "tool_call_id": tool_call_id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": parsed_response,
+                })
+            except json.JSONDecodeError as e:
+                print(f"[JSON] Error parsing tool response: {str(e)}")
+                print(f"[JSON] Raw tool response: {func_response}")
+                # Add the raw response as a string if JSON parsing fails
+                self.messages.append({
+                    "tool_call_id": tool_call_id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": func_response,
+                })
+        except Exception as e:
+            print(f"[Tool] Error calling tool: {str(e)}")
+            traceback.print_exc()
+            self.messages.append({
+                "tool_call_id": tool_call_id,
+                "role": "tool",
+                "name": function_name,
+                "content": f"Error: {str(e)}",
+            })
 
     async def generate_response(self, human_input, tools, temperature=0):
         self.messages.append({"role": "user", "content": human_input})
@@ -350,7 +432,8 @@ async def call_tool(mcp_name, function_name, function_args):
     
     try:
         resp_items = []
-        print(f"Function Name: {function_name} Function Args: {function_args}")
+        print(f"[Tool] Function Name: {function_name}")
+        print(f"[Tool] Function Args: {function_args}")
         
         # Check if MCP session exists
         if not hasattr(cl.context.session, 'mcp_sessions'):
@@ -362,28 +445,47 @@ async def call_tool(mcp_name, function_name, function_args):
             
         mcp_session, _ = mcp_session  # Now safe to unpack
         
-        func_response = await mcp_session.call_tool(function_name, function_args)
-        for item in func_response.content:
-            if isinstance(item, TextContent):
-                resp_items.append({"type": "text", "text": item.text})
-            elif isinstance(item, ImageContent):
-                resp_items.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{item.mimeType};base64,{item.data}",
-                    },
-                })
-            else:
-                raise ValueError(f"Unsupported content type: {type(item)}")
+        try:
+            func_response = await mcp_session.call_tool(function_name, function_args)
+            print(f"[Tool] Raw MCP response: {func_response}")
+            
+            if not func_response or not func_response.content:
+                print("[Tool] Empty response from MCP")
+                return json.dumps([{"type": "text", "text": "No response received from tool"}])
+            
+            for item in func_response.content:
+                if isinstance(item, TextContent):
+                    resp_items.append({"type": "text", "text": item.text})
+                elif isinstance(item, ImageContent):
+                    resp_items.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{item.mimeType};base64,{item.data}",
+                        },
+                    })
+                else:
+                    print(f"[Tool] Unsupported content type: {type(item)}")
+                    resp_items.append({"type": "text", "text": f"Unsupported content type: {type(item)}"})
+            
+            if not resp_items:
+                print("[Tool] No valid content items in response")
+                return json.dumps([{"type": "text", "text": "No valid content in response"}])
+                
+            return json.dumps(resp_items)
+            
+        except Exception as e:
+            print(f"[Tool] Error in MCP call: {str(e)}")
+            traceback.print_exc()
+            return json.dumps([{"type": "text", "text": f"Error calling tool: {str(e)}"}])
         
     except ConnectionError as e:
         error_msg = str(e)
-        print(f"Connection Error: {error_msg}")
-        resp_items.append({"type": "text", "text": f"Error: {error_msg}. Please ensure the MCP server is running at http://localhost:8001/sse and try connecting again."})
+        print(f"[Tool] Connection Error: {error_msg}")
+        return json.dumps([{"type": "text", "text": f"Error: {error_msg}. Please ensure the MCP server is running at http://localhost:8001/sse and try connecting again."}])
     except Exception as e:
+        print(f"[Tool] Unexpected error: {str(e)}")
         traceback.print_exc()
-        resp_items.append({"type": "text", "text": f"Error: {str(e)}"})
-    return json.dumps(resp_items)
+        return json.dumps([{"type": "text", "text": f"Unexpected error: {str(e)}"}])
 
 async def wake_elser():
     """Wake up the ELSER model by sending a test inference request"""
