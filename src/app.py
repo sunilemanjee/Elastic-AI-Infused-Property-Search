@@ -517,7 +517,7 @@ async def wake_elser():
                 )
                 print(f"ELSER wake-up response: {response}")
                 print("ELSER wake-up successful!")
-                return True, "ELSER has awakened"
+                return True, "Endpoints have awakened"
             except Exception as e:
                 if "model_deployment_timeout_exception" in str(e) and attempt < max_retries:
                     print(f"Model deployment timeout, waiting {delay} seconds before retry...")
@@ -569,11 +569,11 @@ Select which AI model you'd like to use for your property search:
     # Create actions list
     actions = []
     
-    # Add Wake Elser button
+    # Add Wake Inference Endpoints button
     actions.append(
         cl.Action(
             name="wake_elser",
-            label="Wake ELSER",
+            label="Wake Inference Endpoints",
             value="wake_elser",
             payload={"action": "wake_elser"},
             description="Wake up the ELSER model for inference"
