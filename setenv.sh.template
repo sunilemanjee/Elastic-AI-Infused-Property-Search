@@ -8,3 +8,4 @@ export OPENAI_API_VERSION=2023-05-15
 export ES_URL="https://xxxxx.us-east-1.aws.elastic.cloud:443"
 export ES_API_KEY="your-api-key-here"
 export ELSER_INFERENCE_ID=".elser-2-elasticsearch" ##update if not using the deefault model
+export E5_INFERENCE_ID=".multilingual-e5-small-elasticsearch"

@@ -1,42 +1,76 @@
-# Elastic AI-Infused Property Search
+# Elastic AI Infused Property Search
 
-A powerful property search application that combines Elasticsearch with AI capabilities, allowing users to search for properties using natural language queries.
+An intelligent property search system that combines Elasticsearch's powerful search capabilities with Azure OpenAI's natural language processing to create a conversational property search experience.
+
+## Demo
+
+Watch a demo of the property search system in action:
+
+<iframe width="560" height="315" src="https://videos.elastic.co/embed/1qQtsuYSdeXGpvdhfYosnn" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+This demo showcases:
+- Natural language property search
+- Location-based search capabilities
+- Real-time property recommendations
+- Interactive chat interface
 
 ## Features
 
-- **Dual LLM Support**: Choose between:
-  - Azure OpenAI: For production-grade AI capabilities
-  - Local LLM (via LM Studio): For privacy-focused or offline usage
-- **Intelligent Query Processing**: Leverages LLM functions to understand query intent and detect entities, then dynamically generates precise Elasticsearch queries using search templates
-- **Elasticsearch Integration**: Efficient property search and filtering
-- **Real-time Results**: Get instant property matches based on your criteria
-- **Interactive UI**: User-friendly interface with clear model selection and search capabilities
-- **ELSER Model Management**: 
-  - "Wake Elser" button for serverless deployments
-  - Automatically wakes up the default ELSER model if it has scaled down due to inactivity
-  - Only required when using the default ELSER model in serverless deployments
-  - Not needed for non-default ELSER model deployments
+- Interactive chat interface powered by Chainlit
+- Azure OpenAI API integration for natural language understanding
+- Elasticsearch for powerful property search
+- Google Maps API integration for location services
+- Real-time streaming responses
+- Dynamic query generation
+- Location-based search capabilities
+
+## Architecture
+
+The system consists of four main components:
+
+1. **Chainlit UI Layer**
+   - Interactive chat interface
+   - Real-time message streaming
+   - Property result display
+   - Image visualization
+
+2. **Azure OpenAI Integration**
+   - Natural language processing
+   - Entity detection
+   - Context management
+   - Response generation
+
+3. **Elasticsearch Backend**
+   - Property data storage
+   - Search templates
+   - Geo-spatial search
+   - Result ranking
+
+4. **MCP Server**
+   - Tool orchestration
+   - API integration
+   - Response processing
+   - Query generation
 
 ## Prerequisites
 
-- Python 3.11 or higher
-- Elasticsearch instance
-- One of the following:
-  - Azure OpenAI account and credentials, or
-  - LM Studio with a compatible model (e.g., Qwen2.5-7B-Instruct)
+- Python 3.8 or higher
+- Azure OpenAI API access
+- Elasticsearch Serverless instance
+- Google Maps API key
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/Elastic-AI-Infused-Property-Search.git
-cd Elastic-AI-Infused-Property-Search
+git clone https://github.com/yourusername/elastic-ai-property-search.git
+cd elastic-ai-property-search
 ```
 
 2. Create and activate a virtual environment:
 ```bash
-python3.11 -m venv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate  # On Windows, use: .venv\Scripts\activate
 ```
 
 3. Install dependencies:
@@ -46,92 +80,66 @@ pip install -r requirements.txt
 
 4. Set up environment variables:
 
-For Azure OpenAI:
-```bash
-# Edit setenv.sh with your Azure OpenAI credentials
-source setenv.sh
-```
+   **Option 1: Using setenv.sh (Recommended)**
+   ```bash
+   # Copy the template file
+   cp setenv.sh.template setenv.sh
+   
+   # Edit setenv.sh with your credentials
+   # IMPORTANT: Never commit setenv.sh to version control!
+   nano setenv.sh  # or use your preferred editor
+   
+   # Source the environment variables
+   source setenv.sh
+   ```
 
-For Local LLM:
-- Install and start LM Studio
-- Load your preferred model (e.g., Qwen2.5-7B-Instruct)
-- Start the local server in LM Studio
+   **Option 2: Manual Setup**
+   Create an `azure.env` file with the following content:
+   ```env
+   AZURE_OPENAI_MODEL=your-model-name
+   AZURE_OPENAI_ENDPOINT=your-endpoint
+   AZURE_OPENAI_API_KEY=your-api-key
+   OPENAI_API_VERSION=2023-05-15
+   ```
 
 ## Usage
 
 1. Start the application:
 ```bash
-chainlit run src/app.py
+chainlit run src/app.py 
 ```
 
 2. Open your browser and navigate to `http://localhost:8000`
 
-3. Choose your preferred LLM:
-   - Azure OpenAI: For production-grade AI capabilities
-   - Local LLM: For privacy-focused or offline usage
+3. Start searching for properties using natural language queries like:
+   - "Find me a 3-bedroom house near downtown with a pool"
+   - "Show me apartments under $2000 with parking"
+   - "I need a pet-friendly condo within 5 miles of the beach"
 
-4. Start searching for properties using natural language queries like:
-   - "Find apartments in New York under $500,000"
-   - "Show me 3-bedroom houses in San Francisco with a pool"
-   - "What are the most expensive properties in Los Angeles?"
+## Project Structure
 
-## Configuration
-
-### Azure OpenAI Setup
-1. Create an Azure OpenAI resource
-2. Get your API key and endpoint
-3. Update `setenv.sh` with your credentials:
 ```
-AZURE_OPENAI_ENDPOINT=your_endpoint
-AZURE_OPENAI_API_KEY=your_key
-OPENAI_API_VERSION=2024-02-15-preview
-AZURE_OPENAI_MODEL=your_model
+.
+├── src/               # Source code
+│   ├── app.py        # Main application file
+│   └── __init__.py   # Package initialization
+├── tests/            # Test directory
+├── docs/             # Documentation
+│   └── ai_property_search_article.md
+├── public/           # Public assets
+├── .chainlit/        # Chainlit configuration
+├── requirements.txt  # Project dependencies
+├── setenv.sh.template # Template for environment variables
+└── .gitignore       # Git ignore file
 ```
-
-### Local LLM Setup
-1. Download and install [LM Studio](https://lmstudio.ai/)
-2. Download a compatible model (e.g., Qwen2.5-7B-Instruct)
-3. Load the model in LM Studio
-4. Start the local server (default: http://localhost:1234)
-
-### ELSER Model Configuration
-1. For serverless deployments using the default ELSER model:
-   - The model will scale down to zero after 10+ minutes of inactivity
-   - Use the "Wake Elser" button to reactivate the model when needed
-   - This helps save costs in serverless environments
-2. For non-default ELSER model deployments:
-   - The "Wake Elser" button is not required
-   - The model remains active and ready for use
-
-### Local LLM Requirements
-- If using the local LLM option, your model must support function calling/tools
-- The model should be able to:
-  - Parse and understand tool definitions in JSON format
-  - Generate structured responses that can be parsed as tool calls
-  - Handle multiple tools in a single conversation
-- Recommended models that support tools:
-  - Qwen 2.5 7B Instruct (default)
-  - Llama 2 70B Chat
-  - Mistral 7B Instruct
-  - Any other model that supports function calling/tools
-- The model should be running locally via LM Studio or a similar inference server
-- Set the `LOCAL_LLM_MODEL` environment variable to your model's name in `setenv.sh`
-
-## Architecture
-
-The application uses a modular architecture:
-- **Frontend**: Chainlit-based UI with model selection and chat interface
-- **LLM Layer**: Supports both Azure OpenAI and local models via LM Studio
-- **Intelligent Query Layer**: 
-  - LLM functions for query intent understanding and entity detection
-  - Dynamic query generation using Elasticsearch search templates
-  - Precise parameter extraction and mapping to schema
-- **Search Engine**: Elasticsearch for efficient property search
-- **MCP Integration**: Model Control Protocol for tool calling
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
 ## License
 

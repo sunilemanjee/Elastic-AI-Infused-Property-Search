@@ -488,46 +488,72 @@ async def call_tool(mcp_name, function_name, function_args):
         return json.dumps([{"type": "text", "text": f"Unexpected error: {str(e)}"}])
 
 async def wake_elser():
-    """Wake up the ELSER model by sending a test inference request"""
+    """Wake up the ELSER and E5 models by sending test inference requests"""
     try:
-        print("Attempting to wake ELSER...")
+        print("Attempting to wake inference endpoints...")
         print(f"Using ES URL: {os.environ.get('ES_URL')}")
         print(f"Using ES API Key: {os.environ.get('ES_API_KEY')[:10]}...")  # Only show first 10 chars for security
         
-        inference_id = os.environ.get("ELSER_INFERENCE_ID", "elser")
-        print(f"Checking status of inference ID: {inference_id}")
+        # Get inference IDs for both models
+        elser_inference_id = os.environ.get("ELSER_INFERENCE_ID", "elser")
+        e5_inference_id = os.environ.get("E5_INFERENCE_ID", "e5")
         
-        # First check the model deployment status
-        try:
-            stats = es_client.ml.get_trained_models_stats(model_id=inference_id)
-            print(f"Model deployment status: {stats}")
-        except Exception as e:
-            print(f"Could not get model stats: {str(e)}")
+        print(f"Checking status of ELSER inference ID: {elser_inference_id}")
+        print(f"Checking status of E5 inference ID: {e5_inference_id}")
         
         # Try up to 3 times with increasing delays
         max_retries = 3
         retry_delays = [5, 10, 15]  # seconds
         
+        # Wake up ELSER model
+        print("Waking up ELSER model...")
         for attempt, delay in enumerate(retry_delays, 1):
             try:
-                print(f"Attempt {attempt} of {max_retries}...")
+                print(f"ELSER attempt {attempt} of {max_retries}...")
                 response = es_client.inference.inference(
-                    inference_id=inference_id,
+                    inference_id=elser_inference_id,
                     input=['wake up']
                 )
                 print(f"ELSER wake-up response: {response}")
                 print("ELSER wake-up successful!")
-                return True, "Endpoints have awakened"
+                break
             except Exception as e:
                 if "model_deployment_timeout_exception" in str(e) and attempt < max_retries:
-                    print(f"Model deployment timeout, waiting {delay} seconds before retry...")
+                    print(f"ELSER model deployment timeout, waiting {delay} seconds before retry...")
                     await asyncio.sleep(delay)
                     continue
-                raise
+                else:
+                    print(f"ELSER wake-up failed: {str(e)}")
+                    return False, f"Failed to wake ELSER: {str(e)}"
+        else:
+            return False, "Failed to wake ELSER after multiple attempts"
         
-        return False, "Failed to wake ELSER after multiple attempts"
+        # Wake up E5 model
+        print("Waking up E5 model...")
+        for attempt, delay in enumerate(retry_delays, 1):
+            try:
+                print(f"E5 attempt {attempt} of {max_retries}...")
+                response = es_client.inference.inference(
+                    inference_id=e5_inference_id,
+                    input=['wake up']
+                )
+                print(f"E5 wake-up response: {response}")
+                print("E5 wake-up successful!")
+                break
+            except Exception as e:
+                if "model_deployment_timeout_exception" in str(e) and attempt < max_retries:
+                    print(f"E5 model deployment timeout, waiting {delay} seconds before retry...")
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    print(f"E5 wake-up failed: {str(e)}")
+                    return False, f"Failed to wake E5: {str(e)}"
+        else:
+            return False, "Failed to wake E5 after multiple attempts"
+        
+        return True, "All inference endpoints have awakened successfully"
     except Exception as e:
-        error_msg = f"Failed to wake ELSER: {str(e)}"
+        error_msg = f"Failed to wake inference endpoints: {str(e)}"
         print(f"Error: {error_msg}")
         traceback.print_exc()  # Print full stack trace
         return False, error_msg
@@ -576,15 +602,15 @@ Select which AI model you'd like to use for your property search:
             label="Wake Inference Endpoints",
             value="wake_elser",
             payload={"action": "wake_elser"},
-            description="Wake up the ELSER model for inference"
+            description="Wake up the ELSER and E5 models for inference"
         )
     )
     
-    # Add Azure OpenAI button
+    # Add Cloud LLM button
     actions.append(
         cl.Action(
             name="use_azure",
-            label="🤖 AZURE OPENAI" if has_azure_credentials else "🤖 AZURE OPENAI (Not Available)",
+            label="🤖 CLOUD LLM" if has_azure_credentials else "🤖 CLOUD LLM (Not Available)",
             value="azure",
             payload={"llm": "azure"},
             description="Use Azure's powerful GPT models" if has_azure_credentials else "Azure OpenAI credentials not found. Please run setenv.sh with your Azure credentials."
@@ -623,7 +649,7 @@ Select which AI model you'd like to use for your property search:
         ).send()
     elif has_azure_credentials and not is_local_model_available:
         await cl.Message(
-            content="✅ Using Azure OpenAI by default. To use Local LLM, please start LM Studio with your local model.",
+            content="✅ Using A Cloud hosted LLM by default. To use Local LLM, please start LM Studio with your local model.",
             author="System"
         ).send()
 
